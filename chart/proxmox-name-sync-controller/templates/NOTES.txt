@@ -1,0 +1,51 @@
+1. Get the application URL by running these commands:
+{{- if .Values.metrics.enabled }}
+  export METRICS_PORT=$(kubectl get --namespace {{ include "proxmox-name-sync-controller.namespace" . }} -o jsonpath="{.spec.ports[0].port}" services {{ include "proxmox-name-sync-controller.fullname" . }}-metrics-service)
+  echo "Visit http://127.0.0.1:8080/metrics to view the metrics"
+  kubectl --namespace {{ include "proxmox-name-sync-controller.namespace" . }} port-forward service/{{ include "proxmox-name-sync-controller.fullname" . }}-metrics-service 8080:$METRICS_PORT
+{{- end }}
+
+2. Check the controller status:
+  kubectl --namespace {{ include "proxmox-name-sync-controller.namespace" . }} get pods -l "{{ include "proxmox-name-sync-controller.selectorLabels" . | replace ": " "=" | replace "\n" "," }}"
+
+3. View controller logs:
+  kubectl --namespace {{ include "proxmox-name-sync-controller.namespace" . }} logs -f deployment/{{ include "proxmox-name-sync-controller.fullname" . }}-controller-manager
+
+4. Check if the controller can access nodes:
+  kubectl auth can-i get nodes --as=system:serviceaccount:{{ include "proxmox-name-sync-controller.namespace" . }}:{{ include "proxmox-name-sync-controller.serviceAccountName" . }}
+
+{{- if not .Values.proxmox.url }}
+
+⚠️  WARNING: Proxmox URL is not configured!
+   Please update your values.yaml with:
+   
+   proxmox:
+     url: "https://your-proxmox-server:8006"
+     tokenId: "root@pam!mytoken"  # API token method (recommended)
+     secret: "your-secret"
+     # OR
+     username: "root@pam"         # Username/password method
+     password: "your-password"
+
+   Then upgrade the release:
+   helm upgrade {{ .Release.Name }} {{ .Chart.Name }}
+{{- end }}
+
+{{- if and (not .Values.proxmox.tokenId) (not .Values.proxmox.username) .Values.proxmox.createSecret }}
+
+⚠️  WARNING: Proxmox authentication is not configured!
+   Please set either API token credentials or username/password in your values.yaml
+{{- end }}
+
+{{- if .Values.controller.leaderElection.enabled }}
+
+✅ Leader election is enabled. You can safely run multiple replicas for high availability.
+{{- else }}
+
+ℹ️  Leader election is disabled. If you plan to run multiple replicas, consider enabling it:
+   controller:
+     leaderElection:
+       enabled: true
+{{- end }}
+
+For more information, visit: https://github.com/rojanDinc/proxmox-name-sync-controller

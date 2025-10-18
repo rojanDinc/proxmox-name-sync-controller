@@ -1,0 +1,21 @@
+apiVersion: v2
+name: proxmox-name-sync-controller
+description: A Kubernetes controller that synchronizes VM names in Proxmox with Kubernetes node names
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://github.com/rojanDinc/proxmox-name-sync-controller
+sources:
+  - https://github.com/rojanDinc/proxmox-name-sync-controller
+maintainers:
+  - name: rojanDinc
+    email: your-email@example.com
+keywords:
+  - kubernetes
+  - controller
+  - proxmox
+  - vm
+  - node
+  - sync
+annotations:
+  category: Infrastructure

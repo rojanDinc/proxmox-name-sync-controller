@@ -1,0 +1,153 @@
+# Default values for proxmox-name-sync-controller.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Controller image configuration
+image:
+  repository: your-registry/proxmox-name-sync-controller
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+# - name: myregistrykey
+
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+    - ALL
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+# Metrics service configuration
+metrics:
+  enabled: true
+  port: 8080
+  # Service configuration for metrics
+  service:
+    type: ClusterIP
+    annotations: {}
+  # ServiceMonitor for Prometheus (requires prometheus-operator)
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    annotations: {}
+
+# Health probe configuration
+healthProbe:
+  port: 8081
+  path: /healthz
+
+# Readiness probe configuration  
+readinessProbe:
+  port: 8081
+  path: /readyz
+
+# Controller configuration
+controller:
+  # Enable leader election for high availability
+  leaderElection:
+    enabled: false
+  
+  # Log level (debug, info, warn, error)
+  logLevel: info
+  
+  # Development mode (enables debug logging)
+  developmentMode: false
+
+# Proxmox configuration
+proxmox:
+  # Proxmox server URL (required)
+  url: ""
+  
+  # Authentication method 1: API Token (recommended)
+  # Format: "root@pam!mytoken"
+  tokenId: ""
+  secret: ""
+  
+  # Authentication method 2: Username/Password (alternative)
+  username: ""
+  password: ""
+  
+  # Accept self-signed certificates
+  insecure: true
+  
+  # Create secret from values (set to false if you manage the secret externally)
+  createSecret: true
+  
+  # Name of existing secret (if createSecret is false)
+  existingSecret: ""
+
+# Deployment configuration
+replicaCount: 1
+
+# Node selector for pod assignment
+nodeSelector: {}
+
+# Tolerations for pod assignment
+tolerations: []
+
+# Affinity for pod assignment
+affinity: {}
+
+# Priority class name
+priorityClassName: ""
+
+# Restart policy
+restartPolicy: Always
+
+# Namespace configuration
+namespace:
+  # Create namespace if it doesn't exist
+  create: true
+  # Namespace name (if empty, uses release namespace)
+  name: ""
+
+# RBAC configuration
+rbac:
+  # Create RBAC resources
+  create: true
+
+# Network policy
+networkPolicy:
+  enabled: false
+  # Additional ingress rules
+  ingress: []
+  # Additional egress rules  
+  egress: []

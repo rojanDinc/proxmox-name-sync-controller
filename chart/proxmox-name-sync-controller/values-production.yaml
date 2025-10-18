@@ -1,0 +1,71 @@
+# Example values for production deployment with API token authentication
+
+# Controller image (update with your registry)
+image:
+  repository: your-registry.com/proxmox-name-sync-controller
+  tag: "v0.1.0"
+
+# Enable leader election for HA
+controller:
+  leaderElection:
+    enabled: true
+  logLevel: info
+  developmentMode: false
+
+# Run multiple replicas for high availability
+replicaCount: 2
+
+# Proxmox configuration using API token (recommended for production)
+proxmox:
+  url: "https://pve.example.com:8006"
+  tokenId: "root@pam!k8s-controller"
+  secret: "your-api-token-secret-here"
+  insecure: false  # Set to false if using valid SSL certificates
+
+# Resource limits for production
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+# Enable metrics and monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true  # Requires prometheus-operator
+    labels:
+      app: prometheus
+
+# Security hardening
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+    - ALL
+
+# Node affinity to avoid control plane nodes
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      preference:
+        matchExpressions:
+        - key: node-role.kubernetes.io/control-plane
+          operator: DoesNotExist
+
+# Enable network policy for security
+networkPolicy:
+  enabled: true
