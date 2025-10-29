@@ -2,69 +2,61 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/rojanDinc/proxmox-name-sync-controller/pkg/proxmox"
+	"sigs.k8s.io/yaml"
 )
 
-// LoadProxmoxConfig loads Proxmox configuration from environment variables
-func LoadProxmoxConfig() (proxmox.Config, error) {
-	config := proxmox.Config{}
-
-	// Required: Proxmox URL
-	config.URL = os.Getenv("PROXMOX_URL")
-	if config.URL == "" {
-		return config, fmt.Errorf("PROXMOX_URL environment variable is required")
+func LoadProxmoxConfig(configPath string) (*proxmox.ClusterConfig, error) {
+	if configPath == "" {
+		return nil, fmt.Errorf("config path empty")
 	}
 
-	// Ensure URL has proper scheme
-	if !strings.HasPrefix(config.URL, "http://") && !strings.HasPrefix(config.URL, "https://") {
-		config.URL = "https://" + config.URL
+	cfg, err := loadFromYAML(configPath)
+	if err != nil {
+		return nil, err
 	}
 
-	// Authentication method 1: API Token (preferred)
-	config.TokenID = os.Getenv("PROXMOX_TOKEN_ID")
-	config.Secret = os.Getenv("PROXMOX_SECRET")
-
-	// Authentication method 2: Username/Password (fallback)
-	if config.TokenID == "" || config.Secret == "" {
-		config.Username = os.Getenv("PROXMOX_USERNAME")
-		config.Password = os.Getenv("PROXMOX_PASSWORD")
-
-		if config.Username == "" || config.Password == "" {
-			return config, fmt.Errorf("either PROXMOX_TOKEN_ID/PROXMOX_SECRET or PROXMOX_USERNAME/PROXMOX_PASSWORD must be provided")
-		}
+	if err := validateConfig(*cfg); err != nil {
+		return nil, err
 	}
 
-	// Optional: Insecure SSL
-	if insecure := os.Getenv("PROXMOX_INSECURE"); insecure != "" {
-		var err error
-		config.Insecure, err = strconv.ParseBool(insecure)
-		if err != nil {
-			return config, fmt.Errorf("invalid PROXMOX_INSECURE value: %w", err)
-		}
-	} else {
-		config.Insecure = true // Default to true for self-signed certificates
-	}
-
-	return config, nil
+	return cfg, err
 }
 
-// ValidateConfig validates the Proxmox configuration
-func ValidateConfig(config proxmox.Config) error {
-	if config.URL == "" {
-		return fmt.Errorf("Proxmox URL cannot be empty")
+func validateConfig(config proxmox.ClusterConfig) error {
+	if len(config.HostURLs) == 0 {
+		return fmt.Errorf("at least one Proxmox URL must be provided")
 	}
 
-	// Check if we have valid authentication
 	hasTokenAuth := config.TokenID != "" && config.Secret != ""
 	hasPasswordAuth := config.Username != "" && config.Password != ""
 
 	if !hasTokenAuth && !hasPasswordAuth {
-		return fmt.Errorf("authentication credentials are required")
+		return fmt.Errorf("authentication credentials are required (token or username/password)")
 	}
 
 	return nil
+}
+
+func loadFromYAML(filePath string) (*proxmox.ClusterConfig, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open YAML config at %s: %w", filePath, err)
+	}
+	defer f.Close()
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read YAML config at %s: %w", filePath, err)
+	}
+
+	var cfg proxmox.ClusterConfig
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML config: %w", err)
+	}
+
+	return &cfg, nil
 }
