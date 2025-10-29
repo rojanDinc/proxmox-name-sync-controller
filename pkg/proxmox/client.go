@@ -21,12 +21,12 @@ const (
 type Config ClusterConfig
 
 type ClusterConfig struct {
-	HostURLs []string
-	Username string
-	Password string
-	TokenID  string
-	Secret   string
-	Insecure bool
+	HostURLs []string `json:"hostUrls"`
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	TokenID  string   `json:"tokenId"`
+	Secret   string   `json:"secret"`
+	Insecure bool     `json:"insecure"`
 }
 
 type ClientPool struct {
