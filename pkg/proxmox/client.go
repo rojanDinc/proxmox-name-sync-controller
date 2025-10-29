@@ -162,45 +162,6 @@ func (c *ClientPool) UpdateVMName(ctx context.Context, nodeName string, vmid int
 	return nil
 }
 
-func (c *ClientPool) FindVMByName(ctx context.Context, name string) (*VM, error) {
-	vms, err := c.GetVMs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, vm := range vms {
-		if vm.Name == name {
-			return &vm, nil
-		}
-	}
-
-	return nil, nil
-}
-
-func (c *ClientPool) GetVMIDByName(ctx context.Context, nodeName string) (*VM, error) {
-	vms, err := c.GetVMs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, vm := range vms {
-		if vm.Name == nodeName {
-			return &vm, nil
-		}
-
-		if strings.EqualFold(vm.Name, nodeName) {
-			return &vm, nil
-		}
-
-		if strings.Contains(strings.ToLower(vm.Name), strings.ToLower(nodeName)) ||
-			strings.Contains(strings.ToLower(nodeName), strings.ToLower(vm.Name)) {
-			return &vm, nil
-		}
-	}
-
-	return nil, nil
-}
-
 func (c *ClientPool) GetVMByUUID(ctx context.Context, uuid string) (*VM, error) {
 	vms, err := c.GetVMs(ctx)
 	if err != nil {
