@@ -35,7 +35,6 @@ import (
 	"github.com/rojanDinc/proxmox-name-sync-controller/pkg/config"
 	"github.com/rojanDinc/proxmox-name-sync-controller/pkg/controller"
 	"github.com/rojanDinc/proxmox-name-sync-controller/pkg/proxmox"
-	// +kubebuilder:scaffold:imports
 )
 
 var (
@@ -45,8 +44,6 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
@@ -54,6 +51,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var secureMetrics bool
+	var configPath string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metrics endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -62,6 +60,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", false,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.StringVar(&configPath, "config-path", "", "The path for the config file to read")
 
 	opts := zap.Options{
 		Development: true,
@@ -100,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	proxmoxConfig, err := config.LoadProxmoxConfig()
+	proxmoxConfig, err := config.LoadProxmoxConfig(configPath)
 	if err != nil {
 		setupLog.Error(err, "unable to load Proxmox configuration")
 		os.Exit(1)
@@ -117,8 +116,6 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Node")
 		os.Exit(1)
 	}
-
-	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
