@@ -100,26 +100,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Load Proxmox configuration
 	proxmoxConfig, err := config.LoadProxmoxConfig()
 	if err != nil {
 		setupLog.Error(err, "unable to load Proxmox configuration")
 		os.Exit(1)
 	}
 
-	if err := config.ValidateConfig(proxmoxConfig); err != nil {
-		setupLog.Error(err, "invalid Proxmox configuration")
-		os.Exit(1)
-	}
-
-	// Create Proxmox client
 	proxmoxClient, err := proxmox.NewClient(proxmoxConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to create Proxmox client")
 		os.Exit(1)
 	}
 
-	// Set up NodeReconciler
 	nodeReconciler := controller.NewNodeReconciler(mgr.GetClient(), mgr.GetScheme(), proxmoxClient)
 	if err = nodeReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Node")

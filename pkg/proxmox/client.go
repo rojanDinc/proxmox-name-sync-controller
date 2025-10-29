@@ -2,16 +2,26 @@ package proxmox
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/luthermonson/go-proxmox"
 )
 
-// Config holds the Proxmox connection configuration
-type Config struct {
-	URL      string
+const (
+	taskInterval = 5 * time.Second
+	taskTimeout  = 30 * time.Second
+)
+
+type Config ClusterConfig
+
+type ClusterConfig struct {
+	HostURLs []string
 	Username string
 	Password string
 	TokenID  string
@@ -19,58 +29,72 @@ type Config struct {
 	Insecure bool
 }
 
-// Client wraps the Proxmox API client
-type Client struct {
-	client *proxmox.Client
+type ClientPool struct {
+	clients []*proxmox.Client
 }
 
-// VM represents a virtual machine with its ID and name
 type VM struct {
 	ID   int
 	Name string
 	Node string
+	UUID string
 }
 
-// NewClient creates a new Proxmox client
-func NewClient(config Config) (*Client, error) {
-	parsedURL, err := url.Parse(config.URL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid Proxmox URL: %w", err)
-	}
-
-	var client *proxmox.Client
-
-	if config.TokenID != "" && config.Secret != "" {
-		// Use API token authentication
-		client = proxmox.NewClient(parsedURL.String(),
-			proxmox.WithAPIToken(config.TokenID, config.Secret),
-		)
-	} else if config.Username != "" && config.Password != "" {
-		// Use username/password authentication
-		credentials := &proxmox.Credentials{
-			Username: config.Username,
-			Password: config.Password,
+func NewClient(clusterConfig *ClusterConfig) (*ClientPool, error) {
+	clientPool := &ClientPool{clients: make([]*proxmox.Client, 0)}
+	for _, hostURL := range clusterConfig.HostURLs {
+		parsedURL, err := url.Parse(hostURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Proxmox URL: %w", err)
 		}
-		client = proxmox.NewClient(parsedURL.String(),
-			proxmox.WithCredentials(credentials),
-		)
-	} else {
-		return nil, fmt.Errorf("either API token (TokenID and Secret) or credentials (Username and Password) must be provided")
+
+		httpClient := &http.Client{}
+		if clusterConfig.Insecure {
+			httpClient.Transport = &http.Transport{
+				// #nosec G402
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+		}
+
+		var client *proxmox.Client
+
+		if clusterConfig.TokenID != "" && clusterConfig.Secret != "" {
+			client = proxmox.NewClient(parsedURL.String(), proxmox.WithAPIToken(clusterConfig.TokenID, clusterConfig.Secret))
+		} else if clusterConfig.Username != "" && clusterConfig.Password != "" {
+			credentials := &proxmox.Credentials{
+				Username: clusterConfig.Username,
+				Password: clusterConfig.Password,
+			}
+			client = proxmox.NewClient(parsedURL.String(),
+				proxmox.WithCredentials(credentials),
+				proxmox.WithHTTPClient(httpClient),
+			)
+		} else {
+			return nil, fmt.Errorf("either API token (TokenID and Secret) or credentials (Username and Password) must be provided")
+		}
+
+		if client != nil {
+			clientPool.clients = append(clientPool.clients, client)
+		}
 	}
 
-	return &Client{client: client}, nil
+	return clientPool, nil
 }
 
-// GetVMs retrieves all VMs from all nodes in the Proxmox cluster
-func (c *Client) GetVMs(ctx context.Context) ([]VM, error) {
-	nodes, err := c.client.Nodes(ctx)
+func (c *ClientPool) GetVMs(ctx context.Context) ([]VM, error) {
+	client, err := c.getClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	nodes, err := client.Nodes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get nodes: %w", err)
 	}
 
 	var allVMs []VM
 	for _, nodeStatus := range nodes {
-		node, err := c.client.Node(ctx, nodeStatus.Node)
+		node, err := client.Node(ctx, nodeStatus.Node)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get node %s: %w", nodeStatus.Node, err)
 		}
@@ -80,11 +104,26 @@ func (c *Client) GetVMs(ctx context.Context) ([]VM, error) {
 			return nil, fmt.Errorf("failed to get VMs from node %s: %w", nodeStatus.Node, err)
 		}
 
-		for _, vm := range vms {
+		for _, partialVM := range vms {
+			vm, err := node.VirtualMachine(ctx, int(partialVM.VMID))
+			if err != nil {
+				return nil, err
+			}
+			if vm.VirtualMachineConfig == nil {
+				slog.Info("Skipping VM with nil configuration", "vmid", vm.VMID, "node", nodeStatus.Node)
+				continue
+			}
+			ok, uuid := extractUUIDFrom(vm.VirtualMachineConfig.SMBios1)
+			if !ok {
+				slog.Info("Skipping VM with no uuid", "vmid", vm.VMID, "node", nodeStatus.Node)
+				continue
+			}
+
 			allVMs = append(allVMs, VM{
 				ID:   int(vm.VMID),
 				Name: vm.Name,
 				Node: nodeStatus.Node,
+				UUID: uuid,
 			})
 		}
 	}
@@ -92,21 +131,22 @@ func (c *Client) GetVMs(ctx context.Context) ([]VM, error) {
 	return allVMs, nil
 }
 
-// UpdateVMName updates the name of a VM
-func (c *Client) UpdateVMName(ctx context.Context, nodeName string, vmid int, newName string) error {
-	// Get the node
-	node, err := c.client.Node(ctx, nodeName)
+func (c *ClientPool) UpdateVMName(ctx context.Context, nodeName string, vmid int, newName string) error {
+	client, err := c.getClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+
+	node, err := client.Node(ctx, nodeName)
 	if err != nil {
 		return fmt.Errorf("failed to get node %s: %w", nodeName, err)
 	}
 
-	// Get the VM
 	vm, err := node.VirtualMachine(ctx, vmid)
 	if err != nil {
 		return fmt.Errorf("failed to get VM %d on node %s: %w", vmid, nodeName, err)
 	}
 
-	// Update the VM name using Config method with VirtualMachineOption
 	task, err := vm.Config(ctx, proxmox.VirtualMachineOption{
 		Name:  "name",
 		Value: newName,
@@ -115,17 +155,14 @@ func (c *Client) UpdateVMName(ctx context.Context, nodeName string, vmid int, ne
 		return fmt.Errorf("failed to update VM %d name: %w", vmid, err)
 	}
 
-	// Wait for the task to complete
-	if task != nil {
-		// The task is returned, but for name changes it's usually quick
-		return nil
+	if err := task.Wait(ctx, taskInterval, taskTimeout); err != nil {
+		return fmt.Errorf("failed to wait for VM %d name update task: %w", vmid, err)
 	}
 
 	return nil
 }
 
-// FindVMByName finds a VM by its current name
-func (c *Client) FindVMByName(ctx context.Context, name string) (*VM, error) {
+func (c *ClientPool) FindVMByName(ctx context.Context, name string) (*VM, error) {
 	vms, err := c.GetVMs(ctx)
 	if err != nil {
 		return nil, err
@@ -137,29 +174,24 @@ func (c *Client) FindVMByName(ctx context.Context, name string) (*VM, error) {
 		}
 	}
 
-	return nil, nil // VM not found
+	return nil, nil
 }
 
-// GetVMIDByName finds VM ID by searching for VMs that might correspond to a node
-func (c *Client) GetVMIDByName(ctx context.Context, nodeName string) (*VM, error) {
+func (c *ClientPool) GetVMIDByName(ctx context.Context, nodeName string) (*VM, error) {
 	vms, err := c.GetVMs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Try different matching strategies
 	for _, vm := range vms {
-		// Exact match
 		if vm.Name == nodeName {
 			return &vm, nil
 		}
 
-		// Case-insensitive match
 		if strings.EqualFold(vm.Name, nodeName) {
 			return &vm, nil
 		}
 
-		// Check if VM name contains the node name or vice versa
 		if strings.Contains(strings.ToLower(vm.Name), strings.ToLower(nodeName)) ||
 			strings.Contains(strings.ToLower(nodeName), strings.ToLower(vm.Name)) {
 			return &vm, nil
@@ -167,4 +199,41 @@ func (c *Client) GetVMIDByName(ctx context.Context, nodeName string) (*VM, error
 	}
 
 	return nil, nil
+}
+
+func (c *ClientPool) GetVMByUUID(ctx context.Context, uuid string) (*VM, error) {
+	vms, err := c.GetVMs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, vm := range vms {
+		slog.Debug("found vm", "id", vm.UUID)
+		if vm.UUID == uuid {
+			return &vm, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (c *ClientPool) getClient(ctx context.Context) (*proxmox.Client, error) {
+	for _, client := range c.clients {
+		if _, err := client.Version(ctx); err == nil {
+			return client, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no client found")
+}
+
+func extractUUIDFrom(smbios string) (bool, string) {
+	splits := strings.Split(smbios, ",")
+	for _, split := range splits {
+		if strings.Contains(split, "uuid=") {
+			return true, strings.Split(split, "uuid=")[1]
+		}
+	}
+
+	return false, ""
 }

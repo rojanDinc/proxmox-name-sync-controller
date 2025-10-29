@@ -2,69 +2,104 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/rojanDinc/proxmox-name-sync-controller/pkg/proxmox"
+	"sigs.k8s.io/yaml"
 )
 
-// LoadProxmoxConfig loads Proxmox configuration from environment variables
-func LoadProxmoxConfig() (proxmox.Config, error) {
-	config := proxmox.Config{}
-
-	// Required: Proxmox URL
-	config.URL = os.Getenv("PROXMOX_URL")
-	if config.URL == "" {
-		return config, fmt.Errorf("PROXMOX_URL environment variable is required")
+func LoadProxmoxConfig() (*proxmox.ClusterConfig, error) {
+	// 1) Prefer YAML-based configuration if provided via file or inline env
+	if cfg, err := loadFromYAML(); err != nil {
+		return nil, err
+	} else if cfg != nil {
+		return cfg, nil
 	}
 
-	// Ensure URL has proper scheme
-	if !strings.HasPrefix(config.URL, "http://") && !strings.HasPrefix(config.URL, "https://") {
-		config.URL = "https://" + config.URL
+	// 2) Fallback to environment variables for backward compatibility
+	var cfg proxmox.ClusterConfig
+
+	// Support both PROXMOX_URLS (comma-separated) and PROXMOX_URL (single), the latter from existing chart
+	urls := os.Getenv("PROXMOX_URLS")
+	if urls == "" {
+		urls = os.Getenv("PROXMOX_URL")
 	}
-
-	// Authentication method 1: API Token (preferred)
-	config.TokenID = os.Getenv("PROXMOX_TOKEN_ID")
-	config.Secret = os.Getenv("PROXMOX_SECRET")
-
-	// Authentication method 2: Username/Password (fallback)
-	if config.TokenID == "" || config.Secret == "" {
-		config.Username = os.Getenv("PROXMOX_USERNAME")
-		config.Password = os.Getenv("PROXMOX_PASSWORD")
-
-		if config.Username == "" || config.Password == "" {
-			return config, fmt.Errorf("either PROXMOX_TOKEN_ID/PROXMOX_SECRET or PROXMOX_USERNAME/PROXMOX_PASSWORD must be provided")
+	if urls != "" {
+		// Split on comma and trim spaces
+		parts := strings.Split(urls, ",")
+		hostURLs := make([]string, 0, len(parts))
+		for _, p := range parts {
+			s := strings.TrimSpace(p)
+			if s != "" {
+				hostURLs = append(hostURLs, s)
+			}
 		}
+		cfg.HostURLs = hostURLs
 	}
 
-	// Optional: Insecure SSL
 	if insecure := os.Getenv("PROXMOX_INSECURE"); insecure != "" {
-		var err error
-		config.Insecure, err = strconv.ParseBool(insecure)
+		v, err := strconv.ParseBool(insecure)
 		if err != nil {
-			return config, fmt.Errorf("invalid PROXMOX_INSECURE value: %w", err)
+			return nil, fmt.Errorf("invalid PROXMOX_INSECURE value: %w", err)
 		}
-	} else {
-		config.Insecure = true // Default to true for self-signed certificates
+		cfg.Insecure = v
 	}
 
-	return config, nil
+	// Credentials can be token or username/password
+	cfg.TokenID = os.Getenv("PROXMOX_TOKEN_ID")
+	cfg.Secret = os.Getenv("PROXMOX_SECRET")
+	if cfg.TokenID == "" || cfg.Secret == "" {
+		cfg.Username = os.Getenv("PROXMOX_USERNAME")
+		cfg.Password = os.Getenv("PROXMOX_PASSWORD")
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
 }
 
-// ValidateConfig validates the Proxmox configuration
-func ValidateConfig(config proxmox.Config) error {
-	if config.URL == "" {
-		return fmt.Errorf("Proxmox URL cannot be empty")
+func validateConfig(config proxmox.ClusterConfig) error {
+	if len(config.HostURLs) == 0 {
+		return fmt.Errorf("at least one Proxmox URL must be provided")
 	}
 
-	// Check if we have valid authentication
 	hasTokenAuth := config.TokenID != "" && config.Secret != ""
 	hasPasswordAuth := config.Username != "" && config.Password != ""
 
 	if !hasTokenAuth && !hasPasswordAuth {
-		return fmt.Errorf("authentication credentials are required")
+		return fmt.Errorf("authentication credentials are required (token or username/password)")
 	}
 
 	return nil
+}
+
+func loadFromYAML() (*proxmox.ClusterConfig, error) {
+	filePath := os.Getenv("PROXMOX_CONFIG_PATH")
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open YAML config at %s: %w", filePath, err)
+	}
+	defer f.Close()
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read YAML config at %s: %w", filePath, err)
+	}
+
+	var cfg proxmox.ClusterConfig
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML config: %w", err)
+	}
+
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
 }
