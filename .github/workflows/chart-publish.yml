@@ -1,12 +1,8 @@
 name: Publish Helm Chart
 
 on:
-  push:
-    branches: [ "main" ]
-    tags: [ "*" ]
-    paths:
-      - "chart/**"
-      - ".github/workflows/chart-publish.yml"
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -33,12 +29,15 @@ jobs:
       - name: Determine chart tag
         id: vars
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            TAG="${GITHUB_REF_NAME}"
-          else
-            TAG="$(echo "${GITHUB_SHA}" | cut -c1-4)"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # Use the chart's own version from Chart.yaml
+          CHART_FILE="chart/proxmox-name-sync-controller/Chart.yaml"
+          CHART_VERSION=$(grep '^version:' "$CHART_FILE" | awk '{print $2}')
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          
+          echo "chart_version=${CHART_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Publishing chart version: $CHART_VERSION for release: $RELEASE_TAG"
+          echo "Note: Chart versions are validated on PRs to prevent overwrites"
 
       - name: Get chart name and dir
         id: chart
@@ -53,12 +52,10 @@ jobs:
           mkdir -p dist
           helm dependency build "${{ steps.chart.outputs.dir }}" || true
           helm package "${{ steps.chart.outputs.dir }}" \
-            --version "${{ steps.vars.outputs.tag }}" \
-            --app-version "${{ steps.vars.outputs.tag }}" \
+            --version "${{ steps.vars.outputs.chart_version }}" \
+            --app-version "${{ steps.vars.outputs.release_tag }}" \
             --destination dist
 
       - name: Push chart to GHCR
         run: |
-          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.tag }}.tgz" "oci://ghcr.io/${{ github.repository_owner }}/charts"
-
-
+          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.chart_version }}.tgz" "oci://ghcr.io/${{ github.repository }}"
