@@ -1,12 +1,6 @@
 name: Publish Helm Chart
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "chart/**"
-      - ".github/workflows/chart-publish.yml"
   release:
     types: [published]
 
@@ -35,17 +29,15 @@ jobs:
       - name: Determine chart tag
         id: vars
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            # For releases, use the release tag
-            TAG="${{ github.event.release.tag_name }}"
-            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-            echo "push_latest=false" >> "$GITHUB_OUTPUT"
-          else
-            # For main branch pushes, use first 5 chars of commit SHA
-            TAG="$(echo "${GITHUB_SHA}" | cut -c1-5)"
-            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-            echo "push_latest=true" >> "$GITHUB_OUTPUT"
-          fi
+          # Use the chart's own version from Chart.yaml
+          CHART_FILE="chart/proxmox-name-sync-controller/Chart.yaml"
+          CHART_VERSION=$(grep '^version:' "$CHART_FILE" | awk '{print $2}')
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          
+          echo "chart_version=${CHART_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Publishing chart version: $CHART_VERSION for release: $RELEASE_TAG"
+          echo "Note: Chart versions are validated on PRs to prevent overwrites"
 
       - name: Get chart name and dir
         id: chart
@@ -60,22 +52,10 @@ jobs:
           mkdir -p dist
           helm dependency build "${{ steps.chart.outputs.dir }}" || true
           helm package "${{ steps.chart.outputs.dir }}" \
-            --version "${{ steps.vars.outputs.tag }}" \
-            --app-version "${{ steps.vars.outputs.tag }}" \
+            --version "${{ steps.vars.outputs.chart_version }}" \
+            --app-version "${{ steps.vars.outputs.release_tag }}" \
             --destination dist
 
       - name: Push chart to GHCR
         run: |
-          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.tag }}.tgz" "oci://ghcr.io/${{ github.repository }}"
-
-      - name: Push latest tag for main branch
-        if: steps.vars.outputs.push_latest == 'true'
-        run: |
-          # Create a copy of the chart with 'latest' version
-          helm package "${{ steps.chart.outputs.dir }}" \
-            --version "latest" \
-            --app-version "${{ steps.vars.outputs.tag }}" \
-            --destination dist
-          helm push "dist/${{ steps.chart.outputs.name }}-latest.tgz" "oci://ghcr.io/${{ github.repository }}"
-
-
+          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.chart_version }}.tgz" "oci://ghcr.io/${{ github.repository }}"
