@@ -1,0 +1,64 @@
+name: Publish Helm Chart
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "*" ]
+    paths:
+      - "chart/**"
+      - ".github/workflows/chart-publish.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Log in to GHCR
+        env:
+          HELM_EXPERIMENTAL_OCI: 1
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Determine chart tag
+        id: vars
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="$(echo "${GITHUB_SHA}" | cut -c1-4)"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Get chart name and dir
+        id: chart
+        run: |
+          CHART_DIR="chart/proxmox-name-sync-controller"
+          CHART_NAME=$(grep '^name:' "$CHART_DIR/Chart.yaml" | awk '{print $2}')
+          echo "dir=${CHART_DIR}" >> "$GITHUB_OUTPUT"
+          echo "name=${CHART_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Package chart
+        run: |
+          mkdir -p dist
+          helm dependency build "${{ steps.chart.outputs.dir }}" || true
+          helm package "${{ steps.chart.outputs.dir }}" \
+            --version "${{ steps.vars.outputs.tag }}" \
+            --app-version "${{ steps.vars.outputs.tag }}" \
+            --destination dist
+
+      - name: Push chart to GHCR
+        run: |
+          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.tag }}.tgz" "oci://ghcr.io/${{ github.repository_owner }}/charts"
+
+
