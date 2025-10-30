@@ -58,4 +58,7 @@ jobs:
 
       - name: Push chart to GHCR
         run: |
-          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.chart_version }}.tgz" "oci://ghcr.io/${{ github.repository }}"
+          # Push to format: ghcr.io/username/charts/repo:tag
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          USERNAME=$(echo "${{ github.repository }}" | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')
+          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.chart_version }}.tgz" "oci://ghcr.io/${USERNAME}/charts/${REPO_NAME}"
