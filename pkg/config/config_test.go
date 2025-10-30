@@ -39,9 +39,10 @@ secret: 1234-23-12323-45235-353`,
 		t.Run(tt.name, func(t *testing.T) {
 			tempFile, err := os.CreateTemp(os.TempDir(), "*.yaml")
 			require.NoError(t, err)
-			tempFile.WriteString(tt.rawConfig)
-			defer tempFile.Close()
-			defer os.Remove(tempFile.Name())
+			_, err = tempFile.WriteString(tt.rawConfig)
+			require.NoError(t, err)
+			defer func() { require.NoError(t, tempFile.Close()) }()
+			defer func() { require.NoError(t, os.Remove(tempFile.Name())) }()
 
 			actual, err := LoadProxmoxConfig(tempFile.Name())
 			assert.NoError(t, err)
