@@ -46,11 +46,14 @@ func loadFromYAML(filePath string) (*proxmox.ClusterConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open YAML config at %s: %w", filePath, err)
 	}
-	defer f.Close()
 
 	b, err := io.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read YAML config at %s: %w", filePath, err)
+	}
+
+	if err := f.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close config file: %w", err)
 	}
 
 	var cfg proxmox.ClusterConfig

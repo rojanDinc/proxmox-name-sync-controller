@@ -33,9 +33,9 @@ type NodeReconciler struct {
 	ProxmoxClient ProxmoxClientInterface
 }
 
-func NewNodeReconciler(client client.Client, scheme *runtime.Scheme, proxmoxClient ProxmoxClientInterface) *NodeReconciler {
+func NewNodeReconciler(k8sClient client.Client, scheme *runtime.Scheme, proxmoxClient ProxmoxClientInterface) *NodeReconciler {
 	return &NodeReconciler{
-		Client:        client,
+		Client:        k8sClient,
 		Scheme:        scheme,
 		ProxmoxClient: proxmoxClient,
 	}
