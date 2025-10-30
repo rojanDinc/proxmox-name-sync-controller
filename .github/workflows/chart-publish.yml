@@ -3,6 +3,16 @@ name: Publish Helm Chart
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: 'Chart version to publish (leave empty to use Chart.yaml version)'
+        required: false
+        type: string
+      release_tag:
+        description: 'Release tag to use as app version (leave empty to use latest commit SHA)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,12 +41,32 @@ jobs:
         run: |
           # Use the chart's own version from Chart.yaml
           CHART_FILE="chart/proxmox-name-sync-controller/Chart.yaml"
-          CHART_VERSION=$(grep '^version:' "$CHART_FILE" | awk '{print $2}')
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual dispatch - use inputs or defaults
+            if [[ -n "${{ github.event.inputs.chart_version }}" ]]; then
+              CHART_VERSION="${{ github.event.inputs.chart_version }}"
+            else
+              CHART_VERSION=$(grep '^version:' "$CHART_FILE" | awk '{print $2}')
+            fi
+            
+            if [[ -n "${{ github.event.inputs.release_tag }}" ]]; then
+              RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+            else
+              RELEASE_TAG="${{ github.sha }}"
+            fi
+            
+            echo "Manual promotion triggered"
+          else
+            # Release event - use chart version and release tag
+            CHART_VERSION=$(grep '^version:' "$CHART_FILE" | awk '{print $2}')
+            RELEASE_TAG="${{ github.event.release.tag_name }}"
+            echo "Release triggered"
+          fi
           
           echo "chart_version=${CHART_VERSION}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Publishing chart version: $CHART_VERSION for release: $RELEASE_TAG"
+          echo "Publishing chart version: $CHART_VERSION with app version: $RELEASE_TAG"
           echo "Note: Chart versions are validated on PRs to prevent overwrites"
 
       - name: Get chart name and dir
