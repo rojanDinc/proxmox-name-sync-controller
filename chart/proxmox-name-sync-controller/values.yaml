@@ -90,6 +90,8 @@ controller:
   
   # Development mode (enables debug logging)
   developmentMode: false
+  # Serve metrics securely over HTTPS
+  metricsSecure: false
 
 # Proxmox configuration
 proxmox:

@@ -40,6 +40,10 @@ spec:
         args:
           - --metrics-bind-address=0.0.0.0:{{ .Values.metrics.port }}
           - --health-probe-bind-address=0.0.0.0:{{ .Values.healthProbe.port }}
+          - --config-path=/config/proxmox.yaml
+          {{- if .Values.controller.metricsSecure }}
+          - --metrics-secure
+          {{- end }}
           {{- if .Values.controller.leaderElection.enabled }}
           - --leader-elect
           {{- end }}
@@ -72,13 +76,17 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-        envFrom:
-        - secretRef:
-            name: {{ include "proxmox-name-sync-controller.secretName" . }}
+        envFrom: []
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-        volumeMounts: []
-      volumes: []
+        volumeMounts:
+        - name: proxmox-config
+          mountPath: /config
+          readOnly: true
+      volumes:
+      - name: proxmox-config
+        secret:
+          secretName: {{ include "proxmox-name-sync-controller.secretName" . }}
       restartPolicy: {{ .Values.restartPolicy }}
       terminationGracePeriodSeconds: 10
       {{- with .Values.nodeSelector }}
