@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "proxmox-name-sync-controller.fullname" . }}-controller-manager
+  name: {{ include "proxmox-name-sync-controller.fullname" . }}
   namespace: {{ include "proxmox-name-sync-controller.namespace" . }}
   labels:
     {{- include "proxmox-name-sync-controller.labels" . | nindent 4 }}

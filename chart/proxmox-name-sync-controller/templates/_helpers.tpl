@@ -87,14 +87,24 @@ Create the secret name for Proxmox credentials
 Validate Proxmox configuration
 */}}
 {{- define "proxmox-name-sync-controller.validateProxmox" -}}
-{{- if not .Values.proxmox.url }}
-{{- fail "Proxmox URL is required. Set proxmox.url in values.yaml" }}
+{{- if and .Values.proxmox.secret.create .Values.proxmox.existingSecret }}
+{{- fail "proxmox.secret.create cannot be true when proxmox.existingSecret is set" }}
 {{- end }}
-{{- if .Values.proxmox.createSecret }}
-{{- $hasToken := and .Values.proxmox.tokenId .Values.proxmox.secret }}
-{{- $hasPassword := and .Values.proxmox.username .Values.proxmox.password }}
+{{- if .Values.proxmox.secret.create }}
+{{- $secret := .Values.proxmox.secret | default dict }}
+{{- $hasHostUrls := $secret.hostUrls }}
+{{- $hasUrl := $secret.url }}
+{{- if and (not $hasHostUrls) (not $hasUrl) }}
+{{- fail "Proxmox URL is required when proxmox.secret.create=true. Set proxmox.secret.hostUrls or proxmox.secret.url in values.yaml" }}
+{{- end }}
+{{- $hasToken := and $secret.tokenId $secret.secret }}
+{{- $hasPassword := and $secret.username $secret.password }}
 {{- if not (or $hasToken $hasPassword) }}
 {{- fail "Proxmox authentication is required. Set either tokenId/secret or username/password in values.yaml" }}
+{{- end }}
+{{- else }}
+{{- if not .Values.proxmox.existingSecret }}
+{{- fail "proxmox.existingSecret is required when proxmox.secret.create=false" }}
 {{- end }}
 {{- end }}
 {{- end }}
