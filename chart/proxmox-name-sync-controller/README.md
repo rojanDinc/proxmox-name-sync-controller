@@ -17,9 +17,37 @@ helm repo add proxmox-sync https://your-registry.com/helm-charts
 helm repo update
 ```
 
-### 2. Create a values file with your Proxmox credentials
+### 2. Provide Proxmox configuration
 
-**For API Token authentication (recommended):**
+You can either let the chart create the Secret from values (default), or provide an existing Secret containing `proxmox.yaml`.
+
+**Option A: Use an existing Secret (managed outside Helm):**
+
+Create a Secret with a key named `proxmox.yaml`:
+
+```yaml
+# proxmox.yaml
+hostUrls:
+  - "https://pve.example.com:8006"
+tokenId: "root@pam!k8s-controller"  # or username/password
+secret: "your-api-token-secret"
+insecure: false
+```
+
+```bash
+kubectl create secret generic my-proxmox-config \
+  --from-file=proxmox.yaml=./proxmox.yaml
+```
+
+Reference it in values:
+
+```yaml
+proxmox:
+  createSecret: false
+  existingSecret: my-proxmox-config
+```
+
+**Option B: Let the chart create the Secret (from values) — API Token (recommended):**
 
 ```yaml
 # my-values.yaml
@@ -33,7 +61,7 @@ proxmox:
   secret: "your-api-token-secret"
 ```
 
-**For Username/Password authentication:**
+**Option B: Let the chart create the Secret (from values) — Username/Password:**
 
 ```yaml
 # my-values.yaml

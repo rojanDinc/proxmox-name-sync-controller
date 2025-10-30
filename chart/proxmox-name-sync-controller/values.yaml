@@ -4,7 +4,7 @@
 
 # Controller image configuration
 image:
-  repository: your-registry/proxmox-name-sync-controller
+  repository: ghcr.io/rojandinc/proxmox-name-sync-controller
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
@@ -47,7 +47,7 @@ securityContext:
 # Resource limits and requests
 resources:
   limits:
-    cpu: 500m
+    cpu: 20m
     memory: 128Mi
   requests:
     cpu: 10m
@@ -90,29 +90,45 @@ controller:
   
   # Development mode (enables debug logging)
   developmentMode: false
+  # Serve metrics securely over HTTPS
+  metricsSecure: false
 
 # Proxmox configuration
 proxmox:
-  # Proxmox server URL (required)
-  url: ""
-  
-  # Authentication method 1: API Token (recommended)
-  # Format: "root@pam!mytoken"
-  tokenId: ""
-  secret: ""
-  
-  # Authentication method 2: Username/Password (alternative)
-  username: ""
-  password: ""
-  
-  # Accept self-signed certificates
-  insecure: true
-  
-  # Create secret from values (set to false if you manage the secret externally)
-  createSecret: true
-  
-  # Name of existing secret (if createSecret is false)
+  # Proxmox Secret data rendered by the chart when createSecret=true
+  # Use ONE of the following inputs inside `secret`:
+  # - secret.hostUrls: list of Proxmox API base URLs
+  # - secret.url: single URL (will be converted to hostUrls)
+  secret:
+    # Render a Secret from the values in this section. If you set
+    # `proxmox.existingSecret`, set this to false.
+    create: true
+    # hostUrls:
+    # - "https://pve.example.com:8006"
+    url: ""
+    # Authentication method 1: API Token (recommended)
+    # Format: "root@pam!mytoken"
+    tokenId: ""
+    secret: ""
+    # Authentication method 2: Username/Password (alternative)
+    username: ""
+    password: ""
+    # Accept self-signed certificates
+    insecure: true
+
+  # Secret management options (mutually exclusive)
+  # If `secret.create` is true, the chart renders a Secret from `proxmox.secret`.
+  # If you set `existingSecret`, you MUST set `secret.create` to false.
   existingSecret: ""
+  # If using an existing secret, it must contain a key named
+  # "proxmox.yaml" with the following structure:
+  #
+  # proxmox.yaml: |
+  #   hostUrls:
+  #     - "https://pve.example.com:8006"
+  #   tokenId: "root@pam!k8s-controller"   # or username/password
+  #   secret:  "<token-secret>"
+  #   insecure: true
 
 # Deployment configuration
 replicaCount: 1
