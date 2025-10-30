@@ -2,11 +2,13 @@ name: Publish Helm Chart
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "*" ]
+    branches:
+      - main
     paths:
       - "chart/**"
       - ".github/workflows/chart-publish.yml"
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -33,12 +35,17 @@ jobs:
       - name: Determine chart tag
         id: vars
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            TAG="${GITHUB_REF_NAME}"
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            # For releases, use the release tag
+            TAG="${{ github.event.release.tag_name }}"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "push_latest=false" >> "$GITHUB_OUTPUT"
           else
-            TAG="$(echo "${GITHUB_SHA}" | cut -c1-4)"
+            # For main branch pushes, use first 5 chars of commit SHA
+            TAG="$(echo "${GITHUB_SHA}" | cut -c1-5)"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "push_latest=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Get chart name and dir
         id: chart
@@ -59,6 +66,16 @@ jobs:
 
       - name: Push chart to GHCR
         run: |
-          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.tag }}.tgz" "oci://ghcr.io/${{ github.repository_owner }}/charts"
+          helm push "dist/${{ steps.chart.outputs.name }}-${{ steps.vars.outputs.tag }}.tgz" "oci://ghcr.io/${{ github.repository }}"
+
+      - name: Push latest tag for main branch
+        if: steps.vars.outputs.push_latest == 'true'
+        run: |
+          # Create a copy of the chart with 'latest' version
+          helm package "${{ steps.chart.outputs.dir }}" \
+            --version "latest" \
+            --app-version "${{ steps.vars.outputs.tag }}" \
+            --destination dist
+          helm push "dist/${{ steps.chart.outputs.name }}-latest.tgz" "oci://ghcr.io/${{ github.repository }}"
 
 
