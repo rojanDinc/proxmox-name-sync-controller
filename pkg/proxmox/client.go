@@ -3,6 +3,7 @@ package proxmox
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -179,13 +180,18 @@ func (c *ClientPool) GetVMByUUID(ctx context.Context, uuid string) (*VM, error) 
 }
 
 func (c *ClientPool) getClient(ctx context.Context) (*proxmox.Client, error) {
+	var errs []error
+
 	for _, client := range c.clients {
-		if _, err := client.Version(ctx); err == nil {
-			return client, nil
+		if _, err := client.Version(ctx); err != nil {
+			errs = append(errs, err)
+			continue
 		}
+
+		return client, nil
 	}
 
-	return nil, fmt.Errorf("no client found")
+	return nil, errors.Join(errs...)
 }
 
 func extractUUIDFrom(smbios string) (bool, string) {
