@@ -189,8 +189,8 @@ func (c *ClientPool) getClient(ctx context.Context) (*proxmox.Client, error) {
 }
 
 func extractUUIDFrom(smbios string) (bool, string) {
-	splits := strings.Split(smbios, ",")
-	for _, split := range splits {
+	splits := strings.SplitSeq(smbios, ",")
+	for split := range splits {
 		if strings.Contains(split, "uuid=") {
 			return true, strings.Split(split, "uuid=")[1]
 		}
