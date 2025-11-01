@@ -21,6 +21,7 @@ const (
 
 type Config ClusterConfig
 
+// TODO: Change this to a slice so that each hosturl can be customized.
 type ClusterConfig struct {
 	HostURLs []string `json:"hostUrls"`
 	Username string   `json:"username"`
@@ -60,7 +61,10 @@ func NewClient(clusterConfig *ClusterConfig) (*ClientPool, error) {
 		var client *proxmox.Client
 
 		if clusterConfig.TokenID != "" && clusterConfig.Secret != "" {
-			client = proxmox.NewClient(parsedURL.String(), proxmox.WithAPIToken(clusterConfig.TokenID, clusterConfig.Secret))
+			client = proxmox.NewClient(parsedURL.String(),
+				proxmox.WithAPIToken(clusterConfig.TokenID, clusterConfig.Secret),
+				proxmox.WithHTTPClient(httpClient),
+			)
 		} else if clusterConfig.Username != "" && clusterConfig.Password != "" {
 			credentials := &proxmox.Credentials{
 				Username: clusterConfig.Username,
