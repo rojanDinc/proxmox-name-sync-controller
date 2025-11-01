@@ -59,7 +59,7 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	vm, err := r.ProxmoxClient.GetVMByUUID(ctx, node.Status.NodeInfo.SystemUUID)
 	if err != nil {
 		logger.Error(err, "Failed to search for VM in Proxmox", "node", node.Name)
-		return ctrl.Result{RequeueAfter: requeueDuration}, proxmoxInternalErr
+		return ctrl.Result{}, proxmoxInternalErr
 	}
 
 	if vm == nil {
@@ -82,7 +82,7 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		logger.Error(err, "Failed to update VM name in Proxmox",
 			"node", node.Name,
 			"vmid", vm.ID)
-		return ctrl.Result{RequeueAfter: requeueDuration}, proxmoxInternalErr
+		return ctrl.Result{}, proxmoxInternalErr
 	}
 
 	logger.Info("Successfully updated VM name in Proxmox",

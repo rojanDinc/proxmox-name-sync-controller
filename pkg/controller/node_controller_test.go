@@ -146,10 +146,9 @@ func TestNodeReconciler_Reconcile_Scenarios(t *testing.T) {
 			r := NewNodeReconciler(c, scheme, tc.mock)
 
 			req := ctrl.Request{NamespacedName: types.NamespacedName{Name: tc.node.Name}}
-			res, err := r.Reconcile(t.Context(), req)
+			_, err := r.Reconcile(t.Context(), req)
 
 			assert.Equal(t, tc.expectedError, err)
-			assert.Equal(t, requeueDuration, res.RequeueAfter)
 		})
 	}
 }
