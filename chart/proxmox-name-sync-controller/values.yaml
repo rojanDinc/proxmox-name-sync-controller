@@ -148,13 +148,6 @@ priorityClassName: ""
 # Restart policy
 restartPolicy: Always
 
-# Namespace configuration
-namespace:
-  # Create namespace if it doesn't exist
-  create: true
-  # Namespace name (if empty, uses release namespace)
-  name: ""
-
 # RBAC configuration
 rbac:
   # Create RBAC resources

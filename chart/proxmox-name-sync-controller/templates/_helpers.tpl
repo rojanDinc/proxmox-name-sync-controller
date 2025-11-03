@@ -65,11 +65,7 @@ Create the name of the service account to use
 Create the namespace to use
 */}}
 {{- define "proxmox-name-sync-controller.namespace" -}}
-{{- if .Values.namespace.name }}
-{{- .Values.namespace.name }}
-{{- else }}
 {{- .Release.Namespace }}
-{{- end }}
 {{- end }}
 
 {{/*
