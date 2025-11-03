@@ -10,7 +10,7 @@ on:
         required: false
         type: string
       release_tag:
-        description: 'Release tag to use as app version (leave empty to use latest commit SHA)'
+        description: 'Release tag to use as app version (leave empty to use Chart.yaml appVersion)'
         required: false
         type: string
 
@@ -53,7 +53,7 @@ jobs:
             if [[ -n "${{ github.event.inputs.release_tag }}" ]]; then
               RELEASE_TAG="${{ github.event.inputs.release_tag }}"
             else
-              RELEASE_TAG="${{ github.sha }}"
+              RELEASE_TAG=$(grep '^appVersion:' "$CHART_FILE" | awk '{print $2}')
             fi
             
             echo "Manual promotion triggered"
