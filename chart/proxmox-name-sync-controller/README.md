@@ -8,16 +8,9 @@ This Helm chart deploys the Proxmox Name Sync Controller on a Kubernetes cluster
 - Helm 3.0+
 - Access to a Proxmox VE cluster with API access
 
-## Installing the Chart
+## Deploying the Chart
 
-### 1. Add the Helm Repository (if published)
-
-```bash
-helm repo add proxmox-sync https://your-registry.com/helm-charts
-helm repo update
-```
-
-### 2. Provide Proxmox configuration
+### 1. Provide Proxmox configuration
 
 You can either let the chart create the Secret from values (default), or provide an existing Secret containing `proxmox.yaml`.
 
@@ -29,7 +22,9 @@ Create a Secret with a key named `proxmox.yaml`:
 # proxmox.yaml
 hostUrls:
   - "https://pve.example.com:8006"
-tokenId: "root@pam!k8s-controller"  # or username/password
+tokenId: "root@pam!k8s-controller" # API tokens are recommended over username/password.
+# username: user1
+# password: mypassword
 secret: "your-api-token-secret"
 insecure: false
 ```
@@ -47,7 +42,7 @@ proxmox:
   existingSecret: my-proxmox-config
 ```
 
-**Option B: Let the chart create the Secret (from values) — API Token (recommended):**
+**Option B: Let the chart create the Secret (from values) — API Token:**
 
 ```yaml
 # my-values.yaml
@@ -75,14 +70,10 @@ proxmox:
   password: "your-password"
 ```
 
-### 3. Install the chart
+### 2. Install the chart
 
 ```bash
-# Install from repository
-helm install my-proxmox-sync proxmox-sync/proxmox-name-sync-controller -f my-values.yaml
-
-# Or install from local chart
-helm install my-proxmox-sync ./helm/proxmox-name-sync-controller -f my-values.yaml
+helm install proxmox-name-sync-controller oci://ghcr.io/rojandinc/charts/proxmox-name-sync-controller
 ```
 
 ### 4. Verify the installation
@@ -92,10 +83,7 @@ helm install my-proxmox-sync ./helm/proxmox-name-sync-controller -f my-values.ya
 kubectl get pods -n default -l app.kubernetes.io/name=proxmox-name-sync-controller
 
 # Check logs
-kubectl logs -f deployment/my-proxmox-sync-controller-manager
-
-# Test node access
-kubectl auth can-i get nodes --as=system:serviceaccount:default:my-proxmox-sync-proxmox-name-sync-controller
+kubectl logs -f deployment/proxmox-name-sync-controller
 ```
 
 ## Configuration
@@ -124,61 +112,6 @@ proxmox:
   url: "https://pve.example.com:8006"
   username: "root@pam"
   password: "your-password"
-```
-
-### High Availability Configuration
-
-For production deployments with multiple replicas:
-
-```yaml
-replicaCount: 2
-controller:
-  leaderElection:
-    enabled: true
-
-affinity:
-  podAntiAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-    - weight: 100
-      podAffinityTerm:
-        labelSelector:
-          matchExpressions:
-          - key: app.kubernetes.io/name
-            operator: In
-            values:
-            - proxmox-name-sync-controller
-        topologyKey: kubernetes.io/hostname
-```
-
-### Monitoring Configuration
-
-Enable Prometheus monitoring:
-
-```yaml
-metrics:
-  enabled: true
-  serviceMonitor:
-    enabled: true
-    labels:
-      app: prometheus
-```
-
-### Security Configuration
-
-For enhanced security:
-
-```yaml
-networkPolicy:
-  enabled: true
-
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 65532
-  readOnlyRootFilesystem: true
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop:
-    - ALL
 ```
 
 ## Values
@@ -214,88 +147,3 @@ securityContext:
 | `affinity` | object | `{}` | Affinity rules |
 | `networkPolicy.enabled` | bool | `false` | Enable network policy |
 
-## Example Deployments
-
-### Development Environment
-
-```bash
-helm install dev-proxmox-sync ./helm/proxmox-name-sync-controller \
-  -f ./helm/proxmox-name-sync-controller/values-development.yaml \
-  --set proxmox.url="https://pve-dev.local:8006" \
-  --set proxmox.username="root@pam" \
-  --set proxmox.password="devpassword"
-```
-
-### Production Environment
-
-```bash
-helm install prod-proxmox-sync ./helm/proxmox-name-sync-controller \
-  -f ./helm/proxmox-name-sync-controller/values-production.yaml \
-  --set image.repository="your-registry.com/proxmox-name-sync-controller" \
-  --set image.tag="v0.1.0" \
-  --set proxmox.url="https://pve.example.com:8006" \
-  --set proxmox.tokenId="root@pam!k8s-controller" \
-  --set proxmox.secret="your-secret-here"
-```
-
-## Upgrading
-
-```bash
-helm upgrade my-proxmox-sync ./helm/proxmox-name-sync-controller -f my-values.yaml
-```
-
-## Uninstalling
-
-```bash
-helm uninstall my-proxmox-sync
-```
-
-Note: This will not remove the ClusterRole and ClusterRoleBinding. To remove them:
-
-```bash
-kubectl delete clusterrole my-proxmox-sync-manager-role
-kubectl delete clusterrolebinding my-proxmox-sync-manager-rolebinding
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Controller can't access nodes**
-   ```bash
-   kubectl auth can-i get nodes --as=system:serviceaccount:default:my-proxmox-sync-proxmox-name-sync-controller
-   ```
-
-2. **Proxmox connection failed**
-   ```bash
-   kubectl logs deployment/my-proxmox-sync-controller-manager
-   ```
-
-3. **Secret not found**
-   ```bash
-   kubectl get secrets | grep proxmox
-   kubectl describe secret my-proxmox-sync-proxmox-credentials
-   ```
-
-### Debug Mode
-
-Enable debug logging:
-
-```yaml
-controller:
-  logLevel: debug
-  developmentMode: true
-```
-
-### Testing Connectivity
-
-```bash
-# Port-forward to test locally
-kubectl port-forward service/my-proxmox-sync-metrics-service 8080:8080
-
-# Check metrics
-curl http://localhost:8080/metrics
-
-# Check health
-curl http://localhost:8080/healthz
-```
