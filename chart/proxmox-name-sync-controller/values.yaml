@@ -66,7 +66,8 @@ metrics:
     enabled: false
     interval: 30s
     scrapeTimeout: 10s
-    labels: {}
+    labels:
+      release: prometheus
     annotations: {}
 
 # Health probe configuration
